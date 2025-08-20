@@ -2280,32 +2280,32 @@ NORETURN void InStream::quit(TResult result, const char* msg)
     switch (result)
     {
     case _ok:
-        errorName = "ok ";
+        errorName = "Accepted | ";
         quitscrS(LightGreen, errorName);
         break;
     case _wa:
-        errorName = "wrong answer ";
+        errorName = "Wrong Answer | ";
         quitscrS(LightRed, errorName);
         break;
     case _pe:
-        errorName = "wrong output format ";
+        errorName = "Presentation Error | ";
         quitscrS(LightRed, errorName);
         break;
     case _fail:
-        errorName = "FAIL ";
+        errorName = "Failed | ";
         quitscrS(LightRed, errorName);
         break;
     case _dirt:
-        errorName = "wrong output format ";
+        errorName = "Presentation Error | ";
         quitscrS(LightCyan, errorName);
         result = _pe;
         break;
     case _points:
-        errorName = "points ";
+        errorName = "Partial ";
         quitscrS(LightYellow, errorName);
         break;
     case _unexpected_eof:
-        errorName = "unexpected eof ";
+        errorName = "Unexpected EOF | ";
         quitscrS(LightCyan, errorName);
         break;
     default:
@@ -2352,6 +2352,16 @@ NORETURN void InStream::quit(TResult result, const char* msg)
 
     quitscr(LightGray, msg);
     std::fprintf(stderr, "\n");
+
+    if (result != _points)
+        std::fprintf(stdout, "%d\n", result == _ok ? 100 : 0);
+    else
+    {
+        if (__testlib_points == std::numeric_limits<float>::infinity())
+            quit(_fail, "Expected points, but infinity found");
+        std::string stringPoints = removeDoubleTrailingZeroes(format("%.10f", __testlib_points));
+        std::fprintf(stdout, "%s\n", stringPoints.c_str());
+    }
 
     inf.close();
     ouf.close();
@@ -3524,7 +3534,7 @@ NORETURN void __testlib_quitp(double points, const char* message)
     if (NULL == message || 0 == strlen(message))
         quitMessage = stringPoints;
     else
-        quitMessage = stringPoints + " " + message;
+        quitMessage = stringPoints + " | " + message;
 
     quit(_points, quitMessage.c_str());
 }
@@ -3538,7 +3548,7 @@ NORETURN void __testlib_quitp(int points, const char* message)
     if (NULL == message || 0 == strlen(message))
         quitMessage = stringPoints;
     else
-        quitMessage = stringPoints + " " + message;
+        quitMessage = stringPoints + " | " + message;
 
     quit(_points, quitMessage.c_str());
 }
@@ -3685,54 +3695,11 @@ void registerInteraction(int argc, char* argv[])
     testlibMode = _interactor;
     __testlib_set_binary(stdin);
 
-    if (argc > 1 && !strcmp("--help", argv[1]))
-        __testlib_help();
+    resultName = "";
+    appesMode = false;
     
-    if (argc < 3 || argc > 6)
-    {
-        quit(_fail, std::string("Program must be run with the following arguments: ") +
-            std::string("<input-file> <output-file> [<answer-file> [<report-file> [<-appes>]]]") + 
-            "\nUse \"--help\" to get help information");
-    }
-
-    if (argc <= 4)
-    {
-        resultName = "";
-        appesMode = false;
-    }
-
-    if (argc == 5)
-    {
-        resultName = argv[4];
-        appesMode = false;
-    }
-
-    if (argc == 6)
-    {
-        if (strcmp("-APPES", argv[5]) && strcmp("-appes", argv[5]))
-        {
-            quit(_fail, std::string("Program must be run with the following arguments: ") +
-                        "<input-file> <output-file> <answer-file> [<report-file> [<-appes>]]");
-        }
-        else
-        {
-            resultName = argv[4];
-            appesMode = true;
-        }
-    }
-
-    inf.init(argv[1], _input);
-
-    tout.open(argv[2], std::ios_base::out);
-    if (tout.fail() || !tout.is_open())
-        quit(_fail, std::string("Can not write to the test-output-file '") + argv[2] + std::string("'"));
-
-    ouf.init(stdin, _output);
-    
-    if (argc >= 4)
-        ans.init(argv[3], _answer);
-    else
-        ans.name = "unopened answer stream";
+    inf.init("input", _input);
+    ans.init("answer", _answer);
 }
 
 void registerValidation()
@@ -3800,45 +3767,12 @@ void registerTestlibCmd(int argc, char* argv[])
     testlibMode = _checker;
     __testlib_set_binary(stdin);
 
-    if (argc > 1 && !strcmp("--help", argv[1]))
-        __testlib_help();
+    resultName = "";
+    appesMode = false;
 
-    if (argc < 4 || argc > 6)
-    {
-        quit(_fail, std::string("Program must be run with the following arguments: ") +
-            std::string("<input-file> <output-file> <answer-file> [<report-file> [<-appes>]]") + 
-            "\nUse \"--help\" to get help information");
-    }
-
-    if (argc == 4)
-    {
-        resultName = "";
-        appesMode = false;
-    }
-
-    if (argc == 5)
-    {
-        resultName = argv[4];
-        appesMode = false;
-    }
-
-    if (argc == 6)
-    {
-        if (strcmp("-APPES", argv[5]) && strcmp("-appes", argv[5]))
-        {
-            quit(_fail, std::string("Program must be run with the following arguments: ") +
-                        "<input-file> <output-file> <answer-file> [<report-file> [<-appes>]]");
-        }
-        else
-        {
-            resultName = argv[4];
-            appesMode = true;
-        }
-    }
-
-    inf.init(argv[1], _input);
-    ouf.init(argv[2], _output);
-    ans.init(argv[3], _answer);
+    inf.init("input", _input);
+    ouf.init("user_out", _output);
+    ans.init("answer", _answer);
 }
 
 void registerTestlib(int argc, ...)
