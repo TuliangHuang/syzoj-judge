@@ -80,3 +80,15 @@ tags
 
 /lib/
 /testdata/
+
+### Yarn (Berry v2/v3) ###
+# Ignore all of .yarn except the recommended folders to keep
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/sdks
+!.yarn/versions
+
+# Yarn Plug'n'Play files
+.pnp.*
