@@ -3118,32 +3118,32 @@ NORETURN void InStream::quit(TResult result, const char *msg) {
 
     switch (result) {
         case _ok:
-            errorName = "ok ";
+            errorName = "Accepted | ";
             quitscrS(LightGreen, errorName);
             break;
         case _wa:
-            errorName = "wrong answer ";
+            errorName = "Wrong Answer | ";
             quitscrS(LightRed, errorName);
             break;
         case _pe:
-            errorName = "wrong output format ";
+            errorName = "Presentation Error | ";
             quitscrS(LightRed, errorName);
             break;
         case _fail:
-            errorName = "FAIL ";
+            errorName = "Failed | ";
             quitscrS(LightRed, errorName);
             break;
         case _dirt:
-            errorName = "wrong output format ";
+            errorName = "Presentation Error | ";
             quitscrS(LightCyan, errorName);
             result = _pe;
             break;
         case _points:
-            errorName = "points ";
+            errorName = "Partial ";
             quitscrS(LightYellow, errorName);
             break;
         case _unexpected_eof:
-            errorName = "unexpected eof ";
+            errorName = "Unexpected EOF | ";
             quitscrS(LightCyan, errorName);
             break;
         default:
@@ -3189,6 +3189,21 @@ NORETURN void InStream::quit(TResult result, const char *msg) {
 
     quitscr(LightGray, __testlib_toPrintableMessage(message).c_str());
     std::fprintf(stderr, "\n");
+
+    if (result != _points) {
+        const int numericScore = (result == _ok ? 100 : 0);
+        std::fprintf(stdout, "%d\n", numericScore);
+        if (result == _ok && tout.is_open()) {
+            tout.seekp(0, std::ios_base::beg);
+            tout << numericScore << std::endl;
+            tout.flush();
+        }
+    } else {
+        if (__testlib_points == std::numeric_limits<float>::infinity())
+            quit(_fail, "Expected points, but infinity found");
+        std::string stringPoints = removeDoubleTrailingZeroes(testlib_format_("%.10f", __testlib_points));
+        std::fprintf(stdout, "%s\n", stringPoints.c_str());
+    }
 
     inf.close();
     ouf.close();
@@ -4472,7 +4487,14 @@ NORETURN void __testlib_quitp(double points, const char *message) {
     if (NULL == message || 0 == strlen(message))
         quitMessage = stringPoints;
     else
-        quitMessage = stringPoints + " " + message;
+        quitMessage = stringPoints + " | " + message;
+
+    if (!tout.is_open()) {
+        quit(_fail, "Can not write to score.txt");
+    }
+    tout.seekp(0, std::ios_base::beg);
+    tout << stringPoints << std::endl;
+    tout.flush();
 
     quit(_points, quitMessage.c_str());
 }
@@ -4485,7 +4507,14 @@ NORETURN void __testlib_quitp(int points, const char *message) {
     if (NULL == message || 0 == strlen(message))
         quitMessage = stringPoints;
     else
-        quitMessage = stringPoints + " " + message;
+        quitMessage = stringPoints + " | " + message;
+
+    if (!tout.is_open()) {
+        quit(_fail, "Can not write to score.txt");
+    }
+    tout.seekp(0, std::ios_base::beg);
+    tout << stringPoints << std::endl;
+    tout.flush();
 
     quit(_points, quitMessage.c_str());
 }
@@ -4691,49 +4720,18 @@ void registerInteraction(int argc, char *argv[]) {
     testlibMode = _interactor;
     __testlib_set_binary(stdin);
 
-    if (argc > 1 && !strcmp("--help", argv[1]))
-        __testlib_help();
+    resultName = "";
+    appesMode = false;
 
-    if (argc < 3 || argc > 6) {
-        quit(_fail, std::string("Program must be run with the following arguments: ") +
-                    std::string("<input-file> <output-file> [<answer-file> [<report-file> [<-appes>]]]") +
-                    "\nUse \"--help\" to get help information");
-    }
-
-    if (argc <= 4) {
-        resultName = "";
-        appesMode = false;
-    }
-
-#ifndef EJUDGE
-    if (argc == 5) {
-        resultName = argv[4];
-        appesMode = false;
-    }
-
-    if (argc == 6) {
-        if (strcmp("-APPES", argv[5]) && strcmp("-appes", argv[5])) {
-            quit(_fail, std::string("Program must be run with the following arguments: ") +
-                        "<input-file> <output-file> <answer-file> [<report-file> [<-appes>]]");
-        } else {
-            resultName = argv[4];
-            appesMode = true;
-        }
-    }
-#endif
-
-    inf.init(argv[1], _input);
-
-    tout.open(argv[2], std::ios_base::out);
-    if (tout.fail() || !tout.is_open())
-        quit(_fail, std::string("Can not write to the test-output-file '") + argv[2] + std::string("'"));
-
+    inf.init("input", _input);
     ouf.init(stdin, _output);
+    ans.init("answer", _answer);
 
-    if (argc >= 4)
-        ans.init(argv[3], _answer);
-    else
-        ans.name = "unopened answer stream";
+    tout.open("score.txt", std::ios_base::out | std::ios_base::trunc);
+    if (tout.fail() || !tout.is_open())
+        quit(_fail, "Can not write to score.txt");
+    tout << 0 << std::endl;
+    tout.flush();
 }
 
 void registerValidation() {
@@ -4865,79 +4863,25 @@ void registerTestlibCmd(int argc, char *argv[]) {
     testlibMode = _checker;
     __testlib_set_binary(stdin);
 
-    std::vector<std::string> args(1, argv[0]);
     checker.initialize();
+    if (!__testlib_testset.empty())
+        checker.setTestset(__testlib_testset.c_str());
+    if (!__testlib_group.empty())
+        checker.setGroup(__testlib_group.c_str());
 
-    for (int i = 1; i < argc; i++) {
-        if (!strcmp("--testset", argv[i])) {
-            if (i + 1 < argc && strlen(argv[i + 1]) > 0)
-                checker.setTestset(argv[++i]);
-            else
-                quit(_fail, std::string("Expected testset after --testset command line parameter"));
-        } else if (!strcmp("--group", argv[i])) {
-            if (i + 1 < argc)
-                checker.setGroup(argv[++i]);
-            else
-                quit(_fail, std::string("Expected group after --group command line parameter"));
-        } else
-            args.push_back(argv[i]);
-    }
+    resultName = "";
+    appesMode = false;
 
-    argc = int(args.size());
-    if (argc > 1 && "--help" == args[1])
-        __testlib_help();
-
-    if (argc < 4 || argc > 6) {
-        quit(_fail, std::string("Program must be run with the following arguments: ") +
-                    std::string("[--testset testset] [--group group] <input-file> <output-file> <answer-file> [<report-file> [<-appes>]]") +
-                    "\nUse \"--help\" to get help information");
-    }
-
-    if (argc == 4) {
-        resultName = "";
-        appesMode = false;
-    }
-
-#ifndef EJUDGE
-    if (argc == 5) {
-        resultName = args[4];
-        appesMode = false;
-    }
-
-    if (argc == 6) {
-        if ("-APPES" != args[5] && "-appes" != args[5]) {
-            quit(_fail, std::string("Program must be run with the following arguments: ") +
-                        "<input-file> <output-file> <answer-file> [<report-file> [<-appes>]]");
-        } else {
-            resultName = args[4];
-            appesMode = true;
-        }
-    }
-#endif
-
-    inf.init(args[1], _input);
-    ouf.init(args[2], _output);
+    inf.init("input", _input);
+    ouf.init("user_out", _output);
     ouf.skipBom();
-    ans.init(args[3], _answer);
+    ans.init("answer", _answer);
+
 }
 
-void registerTestlib(int argc, ...) {
-    if (argc < 3 || argc > 5)
-        quit(_fail, std::string("Program must be run with the following arguments: ") +
-                    "<input-file> <output-file> <answer-file> [<report-file> [<-appes>]]");
-
-    char **argv = new char *[argc + 1];
-
-    va_list ap;
-    va_start(ap, argc);
-    argv[0] = NULL;
-    for (int i = 0; i < argc; i++) {
-        argv[i + 1] = va_arg(ap, char*);
-    }
-    va_end(ap);
-
-    registerTestlibCmd(argc + 1, argv);
-    delete[] argv;
+// Syzoj uses predefined filenames (`input`, `user_out`, `answer`, `score.txt`) instead of argv supplied paths.
+void registerTestlib(int, ...) {
+    registerTestlibCmd(0, nullptr);
 }
 
 static inline void __testlib_ensure(bool cond, const std::string &msg) {

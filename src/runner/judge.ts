@@ -277,9 +277,11 @@ export async function judgeInteraction(task: InteractionRunTask)
             await fse.copy(inputFilePath,
                 pathLib.join(spjWorkingDir, 'input'));
         }
+        const answerDestination = pathLib.join(spjWorkingDir, 'answer');
         if (answerFilePath != null) {
-            await fse.copy(answerFilePath,
-                pathLib.join(spjWorkingDir, 'answer'));
+            await fse.copy(answerFilePath, answerDestination);
+        } else {
+            await fse.writeFile(answerDestination, '');
         }
 
         winston.debug("Fetching user binary...");
